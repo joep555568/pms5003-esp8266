@@ -1,0 +1,163 @@
+#define BLYNK_PRINT Serial
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <Arduino.h>  
+#define LENG 31  //0x42 + 31 bytes equal to 32 bytes  
+#define TIMEOUT 10000 //Microseconds to wait for PMS do wakeup  
+char auth[] = "add your auth";
+char ssid[] = "add your wifi name";
+char pass[] = "add your wifi pasword";
+
+unsigned char buf[LENG];  
+char ergebnisstr[50];  
+   
+ struct dustvalues {  
+  unsigned int PM10Val=0; // Byte 4&5  
+  unsigned int PM2_5Val=0; // Byte 6&7  
+  unsigned int PM01Val=0; // Byte 8&9  
+  unsigned int Beyond03=0; // Byte 16&17  
+  unsigned int Beyond05=0; // Byte 18&19  
+  unsigned int Beyond1=0; // Byte 20&21  
+  unsigned int Beyond2_5=0; // Byte 22&23  
+  unsigned int Beyond5=0; //Byte 24&25  
+  unsigned int Beyond10=0; //Byte 26&27   
+ }; 
+
+ char checkValue(unsigned char *buf, char leng){   
+  int receiveSum=0;  
+   
+  for(int i=0; i<(leng-2); i++){  
+   receiveSum=receiveSum+buf[i];  
+  }  
+  receiveSum=receiveSum + 0x42;  
+  Serial.print("Checksum calculated: ");  
+  Serial.println(receiveSum);  
+  Serial.print("Checksum found: ");  
+  Serial.println((buf[leng-2]<<8)+buf[leng-1]);  
+    
+  if(receiveSum == ((buf[leng-2]<<8)+buf[leng-1])) return 1;  
+    
+  return 0;  
+ }
+
+ unsigned int transmitPM(char HighB, char LowB, unsigned char *buf){  
+  unsigned int PMValue;  
+  PMValue=((buf[HighB]<<8)+buf[LowB]);  
+  return PMValue;  
+ } 
+////////////////////
+   
+ struct dustvalues dustvalues1, dustvalues2;   
+ unsigned char gosleep[]={ 0x42, 0x4d, 0xe4, 0x00, 0x00, 0x01, 0x73 };  
+ unsigned char gowakeup[]={ 0x42, 0x4d, 0xe4, 0x00, 0x01, 0x01, 0x74 };  
+ BlynkTimer timer;
+
+void getpms5003(void){  
+unsigned char found=0;  
+   
+  
+  while (found<2){  
+  if(Serial.available()>0){ 
+    if(Serial.find(0x42)){  //start to read when detect 0x42  
+     Serial.println("0x42 found");  
+     Serial.readBytes(buf,LENG);  
+     if (buf[0] == 0x4d){ //second byte should be 0x4D  
+       found++;  
+       if(checkValue(buf,LENG)){  
+        Serial.println("Checksum okay");  
+          
+        if(found==1){  
+         dustvalues1.PM01Val=transmitPM(3,4,buf);  
+         dustvalues1.PM2_5Val=transmitPM(5,6,buf);  
+         dustvalues1.PM10Val=transmitPM(7,8,buf);  
+         dustvalues1.Beyond03=transmitPM(9,10,buf);
+         dustvalues1.Beyond05=transmitPM(11,12,buf);
+         dustvalues1.Beyond1=transmitPM(13,14,buf);
+         dustvalues1.Beyond2_5=transmitPM(15,16,buf);
+         dustvalues1.Beyond5=transmitPM(17,18,buf);
+         dustvalues1.Beyond10=transmitPM(19,20,buf);
+         sprintf(ergebnisstr,"PM1: %4dug/m3\nPM2.5:%4dug/m3\nPM10: %4dug/m3\n",dustvalues1.PM01Val,dustvalues1.PM2_5Val,dustvalues1.PM10Val);  
+         Serial.println(ergebnisstr);  
+         Serial.println(dustvalues1.PM01Val);
+         Blynk.virtualWrite(V1, dustvalues1.PM01Val);
+         Serial.println(dustvalues1.PM2_5Val);
+         Blynk.virtualWrite(V2, dustvalues1.PM2_5Val);
+         Serial.println(dustvalues1.PM10Val);
+         Blynk.virtualWrite(V3, dustvalues1.PM10Val);       
+         Serial.println(dustvalues1.Beyond03);
+         Blynk.virtualWrite(V4, dustvalues1.Beyond03);
+         Serial.println(dustvalues1.Beyond05);
+         Blynk.virtualWrite(V5, dustvalues1.Beyond05);
+         Serial.println(dustvalues1.Beyond1);
+         Blynk.virtualWrite(V6, dustvalues1.Beyond1);
+         Serial.println(dustvalues1.Beyond2_5);
+         Blynk.virtualWrite(V7, dustvalues1.Beyond2_5);
+         Serial.println(dustvalues1.Beyond5);
+         Blynk.virtualWrite(V8, dustvalues1.Beyond5);
+         Serial.println(dustvalues1.Beyond10);
+         Blynk.virtualWrite(V9, dustvalues1.Beyond10);
+         Serial.flush();
+         delay(10000);  
+        }  
+        if(found==2){  
+         dustvalues2.PM01Val=transmitPM(3,4,buf);  
+         dustvalues2.PM2_5Val=transmitPM(5,6,buf);  
+         dustvalues2.PM10Val=transmitPM(7,8,buf);  
+         dustvalues1.Beyond03=transmitPM(9,10,buf);
+         dustvalues1.Beyond05=transmitPM(11,12,buf);
+         dustvalues1.Beyond1=transmitPM(13,14,buf);
+         dustvalues1.Beyond2_5=transmitPM(15,16,buf);
+         dustvalues1.Beyond5=transmitPM(17,18,buf);
+         dustvalues1.Beyond10=transmitPM(19,20,buf);
+         sprintf(ergebnisstr,"PM1: %4dug/m3\nPM2.5:%4dug/m3\nPM10: %4dug/m3\n",dustvalues2.PM01Val,dustvalues2.PM2_5Val,dustvalues2.PM10Val);  
+         Serial.println(ergebnisstr);  
+         Serial.println(dustvalues1.PM01Val);
+         Blynk.virtualWrite(V1, dustvalues1.PM01Val);
+         Serial.println(dustvalues1.PM2_5Val);
+         Blynk.virtualWrite(V2, dustvalues1.PM2_5Val);
+         Serial.println(dustvalues1.PM10Val);
+         Blynk.virtualWrite(V3, dustvalues1.PM10Val);       
+         Serial.println(dustvalues1.Beyond03);
+         Blynk.virtualWrite(V4, dustvalues1.Beyond03);
+         Serial.println(dustvalues1.Beyond05);
+         Blynk.virtualWrite(V5, dustvalues1.Beyond05);
+         Serial.println(dustvalues1.Beyond1);
+         Blynk.virtualWrite(V6, dustvalues1.Beyond1);
+         Serial.println(dustvalues1.Beyond2_5);
+         Blynk.virtualWrite(V7, dustvalues1.Beyond2_5);
+         Serial.println(dustvalues1.Beyond5);
+         Blynk.virtualWrite(V8, dustvalues1.Beyond5);
+         Serial.println(dustvalues1.Beyond10);
+         Blynk.virtualWrite(V9, dustvalues1.Beyond10);
+         Serial.flush(); 
+        }  
+      }else{  
+       Serial.println("Checksum not okay");  
+       Serial.flush();  
+       if(found>0)found--;  
+       delay(500);  
+      }  
+     }  
+   }  
+   }  
+   }  
+ }  
+
+void setup()
+{
+Serial.begin(9600);
+Serial.setTimeout(1500);  
+Blynk.begin(auth, ssid, pass);
+  // You can also specify server:
+  //Blynk.begin(auth, ssid, pass, "blynk-cloud.com", 80);
+  //Blynk.begin(auth, ssid, pass, IPAddress(192,168,1,100), 8080);
+Blynk.virtualWrite(V1, dustvalues1.PM01Val);
+timer.setInterval(1000L, getpms5003);
+}
+
+void loop()
+{
+  
+  Blynk.run();
+  timer.run(); 
+} 
